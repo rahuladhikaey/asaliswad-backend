@@ -160,11 +160,99 @@ CREATE POLICY "Notify Requests Write" ON public.notify_requests FOR ALL USING (a
 CREATE POLICY "Admin Users Protection" ON public.admin_users FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Admin Audit Logs Protection" ON public.admin_audit_logs FOR ALL USING (auth.role() = 'service_role');
 
--- =============================================================
--- STORAGE BUCKET CREATION & POLICIES - INSTANCE A
--- =============================================================
+-- 6. Sellers Table (Instance A Dual Sync)
+CREATE TABLE IF NOT EXISTS public.sellers (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    business_name TEXT NOT NULL,
+    owner_name TEXT NOT NULL,
+    mobile_number TEXT NOT NULL,
+    email TEXT NOT NULL,
+    pickup_address TEXT,
+    warehouse_address TEXT,
+    city TEXT,
+    state TEXT,
+    pincode TEXT,
+    status TEXT DEFAULT 'pending',
+    rejection_reason TEXT,
+    upi_id TEXT,
+    phonepe_number TEXT,
+    gstin TEXT,
+    pan TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
--- Create Public Storage Bucket 'product-images'
+-- 7. Seller Pickup Locations Table
+CREATE TABLE IF NOT EXISTS public.seller_pickup_locations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    seller_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    phone TEXT,
+    email TEXT,
+    address_line1 TEXT NOT NULL,
+    city TEXT NOT NULL,
+    state TEXT NOT NULL,
+    pincode TEXT NOT NULL,
+    is_default BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 8. Seller Settlements Table
+CREATE TABLE IF NOT EXISTS public.seller_settlements (
+    id TEXT PRIMARY KEY,
+    seller_id TEXT NOT NULL,
+    seller_name TEXT NOT NULL,
+    seller_upi_id TEXT,
+    seller_phonepe TEXT,
+    amount NUMERIC(10, 2) NOT NULL,
+    commission_deducted NUMERIC(10, 2) DEFAULT 0,
+    status TEXT DEFAULT 'PENDING',
+    payment_method TEXT DEFAULT 'UPI / PhonePe Manual Transfer',
+    utr_number TEXT,
+    notes TEXT,
+    payment_date TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for Query Performance
+CREATE INDEX IF NOT EXISTS idx_products_category ON public.products(category_id);
+CREATE INDEX IF NOT EXISTS idx_orders_email ON public.orders(user_email);
+CREATE INDEX IF NOT EXISTS idx_sellers_status ON public.sellers(status);
+CREATE INDEX IF NOT EXISTS idx_settlements_seller ON public.seller_settlements(seller_id);
+CREATE INDEX IF NOT EXISTS idx_settlements_status ON public.seller_settlements(status);
+
+-- Enable RLS on Sellers & Settlements
+ALTER TABLE public.sellers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.seller_pickup_locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.seller_settlements ENABLE ROW LEVEL SECURITY;
+
+-- Sellers RLS Policies
+DROP POLICY IF EXISTS "Public Read Sellers" ON public.sellers;
+DROP POLICY IF EXISTS "Public Insert Sellers" ON public.sellers;
+DROP POLICY IF EXISTS "Public Update Sellers" ON public.sellers;
+
+CREATE POLICY "Public Read Sellers" ON public.sellers FOR SELECT USING (true);
+CREATE POLICY "Public Insert Sellers" ON public.sellers FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Sellers" ON public.sellers FOR UPDATE USING (true);
+
+-- Seller Locations RLS Policies
+DROP POLICY IF EXISTS "Public Read Seller Locations" ON public.seller_pickup_locations;
+DROP POLICY IF EXISTS "Public Insert Seller Locations" ON public.seller_pickup_locations;
+
+CREATE POLICY "Public Read Seller Locations" ON public.seller_pickup_locations FOR SELECT USING (true);
+CREATE POLICY "Public Insert Seller Locations" ON public.seller_pickup_locations FOR INSERT WITH CHECK (true);
+
+-- Seller Settlements RLS Policies
+DROP POLICY IF EXISTS "Public Read Settlements" ON public.seller_settlements;
+DROP POLICY IF EXISTS "Public Insert Settlements" ON public.seller_settlements;
+DROP POLICY IF EXISTS "Public Update Settlements" ON public.seller_settlements;
+
+CREATE POLICY "Public Read Settlements" ON public.seller_settlements FOR SELECT USING (true);
+CREATE POLICY "Public Insert Settlements" ON public.seller_settlements FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Settlements" ON public.seller_settlements FOR UPDATE USING (true);
+
+-- Storage Bucket & Policies
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
     'product-images',
@@ -175,8 +263,12 @@ VALUES (
 )
 ON CONFLICT (id) DO UPDATE SET public = true;
 
--- Storage Policies for 'product-images' Bucket
+DROP POLICY IF EXISTS "Public Storage Objects Read" ON storage.objects;
+DROP POLICY IF EXISTS "Admin Storage Objects Insert" ON storage.objects;
+DROP POLICY IF EXISTS "Admin Storage Objects Delete" ON storage.objects;
+
 CREATE POLICY "Public Storage Objects Read" ON storage.objects FOR SELECT USING (bucket_id = 'product-images');
 CREATE POLICY "Admin Storage Objects Insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'product-images');
 CREATE POLICY "Admin Storage Objects Delete" ON storage.objects FOR DELETE USING (bucket_id = 'product-images');
+
 
