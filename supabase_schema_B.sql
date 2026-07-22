@@ -138,6 +138,45 @@ CREATE INDEX IF NOT EXISTS idx_pickup_locations_seller ON public.seller_pickup_l
 CREATE INDEX IF NOT EXISTS idx_settlements_seller ON public.seller_settlements(seller_id);
 
 -- =============================================================
+-- AUTOMATIC TRIGGER FOR NEW SELLER REGISTRATION
+-- =============================================================
+
+CREATE OR REPLACE FUNCTION public.handle_new_seller()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (NEW.raw_user_meta_data->>'role') = 'seller' OR (NEW.raw_user_meta_data->>'role') IS NULL THEN
+    INSERT INTO public.sellers (
+      id,
+      user_id,
+      business_name,
+      owner_name,
+      mobile_number,
+      email,
+      status
+    )
+    VALUES (
+      NEW.id::text,
+      NEW.id::text,
+      COALESCE(NEW.raw_user_meta_data->>'business_name', NEW.raw_user_meta_data->>'full_name', 'New Merchant'),
+      COALESCE(NEW.raw_user_meta_data->>'full_name', 'Owner'),
+      COALESCE(NEW.raw_user_meta_data->>'phone', ''),
+      NEW.email,
+      'pending'
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      email = EXCLUDED.email,
+      updated_at = NOW();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created_seller ON auth.users;
+CREATE TRIGGER on_auth_user_created_seller
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_seller();
+
+-- =============================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES - INSTANCE B (SUPER ADMIN & SELLERS)
 -- =============================================================
 
