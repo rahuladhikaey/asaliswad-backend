@@ -1,25 +1,46 @@
+import jwt from 'jsonwebtoken';
+import { config } from '../config/index.js';
 import { HTTP_STATUS } from '../constants/index.js';
-import { supabase } from '../lib/supabase.js';
 
-export const authenticateUser = async (req, res, next) => {
+export const authenticateJWT = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     return res.status(HTTP_STATUS.UNAUTHORIZED).json({
       success: false,
-      error: 'Missing authorization token'
+      error: 'Access token required'
     });
   }
 
   const token = authHeader.split(' ')[1];
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-
-  if (error || !user) {
+  try {
+    const decoded = jwt.verify(token, config.jwt.secret);
+    req.user = decoded;
+    next();
+  } catch (err) {
     return res.status(HTTP_STATUS.UNAUTHORIZED).json({
       success: false,
-      error: 'Invalid or expired token'
+      error: 'Invalid or expired token',
+      code: 'TOKEN_EXPIRED'
     });
   }
+};
 
-  req.user = user;
-  next();
+export const requireRole = (allowedRoles = []) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+
+    if (allowedRoles.length > 0 && !allowedRoles.includes(req.user.role)) {
+      return res.status(HTTP_STATUS.FORBIDDEN).json({
+        success: false,
+        error: 'Forbidden: insufficient permissions'
+      });
+    }
+
+    next();
+  };
 };
