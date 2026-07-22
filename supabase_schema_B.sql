@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS public.sellers (
     pincode TEXT,
     upi_id TEXT,
     phonepe_number TEXT,
-    status TEXT DEFAULT 'pending',
+    status TEXT DEFAULT 'approved',
     rejection_reason TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -161,7 +161,7 @@ BEGIN
       COALESCE(NEW.raw_user_meta_data->>'full_name', 'Owner'),
       COALESCE(NEW.raw_user_meta_data->>'phone', ''),
       NEW.email,
-      'pending'
+      'approved'
     )
     ON CONFLICT (id) DO UPDATE SET
       email = EXCLUDED.email,
