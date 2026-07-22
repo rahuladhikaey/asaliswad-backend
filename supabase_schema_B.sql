@@ -29,8 +29,8 @@ CREATE TABLE IF NOT EXISTS public.admin_audit_logs (
 
 -- 3. Sellers Table
 CREATE TABLE IF NOT EXISTS public.sellers (
-    id TEXT PRIMARY KEY,
-    user_id TEXT,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID,
     store_name TEXT,
     business_name TEXT NOT NULL,
     owner_name TEXT NOT NULL,
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS public.sellers (
 -- 4. Seller Pickup Locations Table (Shiprocket)
 CREATE TABLE IF NOT EXISTS public.seller_pickup_locations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    seller_id TEXT NOT NULL,
+    seller_id UUID REFERENCES public.sellers(id) ON DELETE CASCADE,
     location_name TEXT,
     name TEXT,
     phone TEXT,
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS public.seller_pickup_locations (
 -- 5. Seller Inventory Table
 CREATE TABLE IF NOT EXISTS public.inventory (
     id BIGSERIAL PRIMARY KEY,
-    seller_id TEXT NOT NULL,
+    seller_id UUID REFERENCES public.sellers(id) ON DELETE CASCADE,
     product_id BIGINT NOT NULL,
     stock_count INT DEFAULT 0,
     reserved_count INT DEFAULT 0,
@@ -97,8 +97,8 @@ CREATE TABLE IF NOT EXISTS public.stock_history (
 
 -- 7. Seller Settlements Table
 CREATE TABLE IF NOT EXISTS public.seller_settlements (
-    id TEXT PRIMARY KEY,
-    seller_id TEXT NOT NULL,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    seller_id UUID REFERENCES public.sellers(id) ON DELETE CASCADE,
     seller_name TEXT NOT NULL,
     seller_upi_id TEXT,
     seller_phonepe TEXT,
@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS public.seller_settlements (
 -- 8. Seller Earnings & Reports Table
 CREATE TABLE IF NOT EXISTS public.seller_reports (
     id BIGSERIAL PRIMARY KEY,
-    seller_id TEXT NOT NULL,
+    seller_id UUID REFERENCES public.sellers(id) ON DELETE CASCADE,
     report_type TEXT NOT NULL,
     data JSONB NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS public.seller_reports (
 -- 9. System & Merchant Notifications Table
 CREATE TABLE IF NOT EXISTS public.seller_notifications (
     id BIGSERIAL PRIMARY KEY,
-    seller_id TEXT NOT NULL,
+    seller_id UUID REFERENCES public.sellers(id) ON DELETE CASCADE,
     message TEXT NOT NULL,
     read_status BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -155,8 +155,8 @@ BEGIN
       status
     )
     VALUES (
-      NEW.id::text,
-      NEW.id::text,
+      NEW.id,
+      NEW.id,
       COALESCE(NEW.raw_user_meta_data->>'business_name', NEW.raw_user_meta_data->>'full_name', 'New Merchant'),
       COALESCE(NEW.raw_user_meta_data->>'full_name', 'Owner'),
       COALESCE(NEW.raw_user_meta_data->>'phone', ''),
