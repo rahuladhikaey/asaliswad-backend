@@ -21,6 +21,7 @@ router.post('/inventory', authenticateJWT, requireRole([ROLES.SELLER]), updateSe
 // Seller 15-Day Account Deletion Lifecycle Routes
 router.post('/request-deletion', authenticateJWT, requireRole([ROLES.SELLER]), requestAccountDeletion);
 router.post('/restore-account', authenticateJWT, restoreAccount);
+router.get('/purge-expired', purgeExpiredDeletions);
 router.post('/purge-expired', purgeExpiredDeletions);
 
 export default router;
