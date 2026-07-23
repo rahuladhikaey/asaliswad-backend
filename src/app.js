@@ -43,8 +43,9 @@ app.use(
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// API Routes
+// API Routes (Supports both /api and /api/v1)
 app.use('/api', routes);
+app.use('/api/v1', routes);
 
 // Global Error Handler
 app.use(errorHandler);
