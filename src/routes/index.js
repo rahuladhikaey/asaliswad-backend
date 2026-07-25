@@ -9,6 +9,7 @@ import sellerRoutes from './sellerRoutes.js';
 import adminRoutes from './adminRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
 import uploadRoutes from './uploadRoutes.js';
+import cronRoutes from './cronRoutes.js';
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use('/sellers', sellerRoutes);
 router.use('/admin', adminRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/uploads', uploadRoutes);
+router.use('/cron', cronRoutes);
 
 export default router;

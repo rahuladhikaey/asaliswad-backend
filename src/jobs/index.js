@@ -1,5 +1,39 @@
 import cron from 'node-cron';
 import { purgeExpiredDeletions } from '../controllers/sellerController.js';
+import { supabaseA, supabaseB } from '../lib/supabase.js';
+
+/**
+ * Auto-complete orders that have been marked as 'delivered' for more than 7 days
+ */
+export const autoCompleteDeliveredOrders = async () => {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    // 1. Update in Supabase A (Customer Orders)
+    const { data: updatedA, error: errA } = await supabaseA
+      .from('orders')
+      .update({ order_status: 'completed', updated_at: new Date().toISOString() })
+      .eq('order_status', 'delivered')
+      .lte('updated_at', sevenDaysAgo)
+      .select();
+
+    if (errA) console.error('❌ [CRON] Error auto-completing orders in Supabase A:', errA);
+
+    // 2. Update in Supabase B (Seller Orders)
+    const { data: updatedB, error: errB } = await supabaseB
+      .from('orders')
+      .update({ order_status: 'completed', updated_at: new Date().toISOString() })
+      .eq('order_status', 'delivered')
+      .lte('updated_at', sevenDaysAgo)
+      .select();
+
+    if (errB) console.error('❌ [CRON] Error auto-completing orders in Supabase B:', errB);
+
+    console.log(`✅ [CRON] Auto-completed ${updatedA?.length || 0} orders (Customer DB) & ${updatedB?.length || 0} orders (Seller DB).`);
+  } catch (error) {
+    console.error('❌ [CRON] Failed executing autoCompleteDeliveredOrders:', error);
+  }
+};
 
 /**
  * Initialize all automated background & cron jobs
@@ -11,7 +45,6 @@ export const initCronJobs = () => {
   cron.schedule('0 0 * * *', async () => {
     console.log('⏰ [CRON] Starting Daily Expired Seller Account Purge...');
     try {
-      // Mock request and response handlers for internal invocation
       const req = {};
       const res = {
         status: (code) => ({
@@ -26,5 +59,12 @@ export const initCronJobs = () => {
     }
   });
 
-  console.log('✅ Cron Jobs Scheduled: [Seller Account Daily Purge @ 00:00]');
+  // Job 2: Auto-complete delivered orders older than 7 days daily at 02:00 AM
+  cron.schedule('0 2 * * *', async () => {
+    console.log('⏰ [CRON] Starting Auto-Completion of Delivered Orders...');
+    await autoCompleteDeliveredOrders();
+  });
+
+  console.log('✅ Cron Jobs Scheduled: [Seller Purge @ 00:00, Order Auto-Completion @ 02:00]');
 };
+
