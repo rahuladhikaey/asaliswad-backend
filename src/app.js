@@ -19,6 +19,7 @@ const ALLOWED_ORIGINS = [
   'https://www.asaliswad.com',
   'https://seller.asaliswad.com',
   'https://admin.asaliswad.com',
+  'https://api.asaliswad.com',
   'http://localhost:3000',
   'http://localhost:3001',
   'http://localhost:3002'
