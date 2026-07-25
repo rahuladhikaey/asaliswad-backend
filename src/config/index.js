@@ -11,17 +11,16 @@ export const config = {
     refreshSecret: process.env.JWT_REFRESH_SECRET || 'x9#kL2!pQ8$vN5@mZ1*cJ4^yH7&tR0%bW3_refresh',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d'
   },
-  // Supabase Instance A: Users & Customer Database (Storefront, Products, Categories, Orders, User Addresses, Payments)
+  // Unified Production Database (Single Data Source)
   supabaseA: {
-    url: process.env.SUPABASE_A_URL || 'https://bprkenwmheakcqryjupi.supabase.co',
-    serviceKey: process.env.SUPABASE_A_SERVICE_ROLE_KEY || 'sb_publishable_W3vW-6g_CDVw57zEK-oF5A_Y3RzKCzR',
-    anonKey: process.env.SUPABASE_A_ANON_KEY || 'sb_publishable_W3vW-6g_CDVw57zEK-oF5A_Y3RzKCzR'
+    url: process.env.SUPABASE_A_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://qgiichnytbukisofuqiv.supabase.co',
+    serviceKey: process.env.SUPABASE_A_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'sb_publishable_kMnEF2aqyz1z2SOB-sxtCQ_s4J-VisB',
+    anonKey: process.env.SUPABASE_A_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kMnEF2aqyz1z2SOB-sxtCQ_s4J-VisB'
   },
-  // Supabase Instance B: Super Admin & Seller Database (Super Admin Auth, Admin Audit Logs, Seller Profiles, Inventory, Pickup Locations, Settlements, Reports, Notifications)
   supabaseB: {
-    url: process.env.SUPABASE_B_URL || 'https://qgiichnytbukisofuqiv.supabase.co',
-    serviceKey: process.env.SUPABASE_B_SERVICE_ROLE_KEY || 'sb_publishable_kMnEF2aqyz1z2SOB-sxtCQ_s4J-VisB',
-    anonKey: process.env.SUPABASE_B_ANON_KEY || 'sb_publishable_kMnEF2aqyz1z2SOB-sxtCQ_s4J-VisB'
+    url: process.env.SUPABASE_B_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://qgiichnytbukisofuqiv.supabase.co',
+    serviceKey: process.env.SUPABASE_B_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'sb_publishable_kMnEF2aqyz1z2SOB-sxtCQ_s4J-VisB',
+    anonKey: process.env.SUPABASE_B_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kMnEF2aqyz1z2SOB-sxtCQ_s4J-VisB'
   },
   razorpay: {
     keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_ShRpqbs6hVT6Ie',
