@@ -22,6 +22,8 @@ export async function syncProductToCustomerDb(product, action = 'upsert') {
       return;
     }
 
+    const isValidUuid = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
     const syncPayload = {
       id: product.id,
       name: product.name,
@@ -31,7 +33,7 @@ export async function syncProductToCustomerDb(product, action = 'upsert') {
       description: product.description || '',
       image_url: product.image_url || product.images?.[0] || 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&q=80&w=300',
       images: product.images || (product.image_url ? [product.image_url] : []),
-      category_id: product.category_id || null,
+      category_id: isValidUuid(product.category_id) ? product.category_id : null,
       category_name: product.category_name || product.category || 'General',
       category: product.category || product.category_name || 'General',
       brand: product.brand || 'Asali Swad',
@@ -78,7 +80,6 @@ export async function syncCategoryToCustomerDb(category, action = 'upsert') {
       slug: category.slug || category.name?.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-'),
       main_category: category.main_category || 'Grocery',
       image_url: category.image_url || null,
-      icon: category.icon || '📦',
       is_active: category.is_active !== false,
       sort_order: category.sort_order || 0,
       updated_at: new Date().toISOString()
