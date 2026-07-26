@@ -1,13 +1,5 @@
-import jwt from 'jsonwebtoken';
-import { supabaseA, supabaseB } from '../lib/supabase.js';
-import { config } from '../config/index.js';
+import { supabaseA as supabase } from '../lib/supabase.js';
 import { HTTP_STATUS, ROLES } from '../constants/index.js';
-
-const generateTokens = (payload) => {
-  const accessToken = jwt.sign(payload, config.jwt.secret, { expiresIn: config.jwt.expiresIn });
-  const refreshToken = jwt.sign(payload, config.jwt.refreshSecret, { expiresIn: config.jwt.refreshExpiresIn });
-  return { accessToken, refreshToken };
-};
 
 export const login = async (req, res, next) => {
   try {
@@ -16,26 +8,47 @@ export const login = async (req, res, next) => {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, error: 'Email and password are required' });
     }
 
-    // Route Seller Auth to Supabase B, Customer & Admin Auth to Supabase A
-    const targetSupabase = role === ROLES.SELLER ? supabaseB : supabaseA;
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
 
-    const { data, error } = await targetSupabase.auth.signInWithPassword({ email, password });
-    if (error || !data.user) {
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, error: error?.message || 'Invalid credentials' });
+    if (error || !data?.user) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        error: error?.message || 'Invalid email or password'
+      });
     }
 
-    const tokenPayload = {
-      id: data.user.id,
-      email: data.user.email,
-      role: data.user.user_metadata?.role || role
-    };
+    const user = data.user;
+    const session = data.session;
+    const userRole = user.user_metadata?.role || role;
 
-    const tokens = generateTokens(tokenPayload);
+    // Fetch matching profile or seller data
+    let profileData = null;
+    if (userRole === ROLES.SELLER) {
+      const { data: seller } = await supabase
+        .from('sellers')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      profileData = seller;
+    } else {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+      profileData = profile;
+    }
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
-      user: data.user,
-      ...tokens
+      user,
+      profile: profileData,
+      accessToken: session?.access_token,
+      refreshToken: session?.refresh_token,
+      expiresAt: session?.expires_at,
     });
   } catch (err) {
     next(err);
@@ -49,33 +62,48 @@ export const register = async (req, res, next) => {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, error: 'Email and password are required' });
     }
 
-    // Route Seller Registration to Supabase B, Customer Registration to Supabase A
-    const targetSupabase = role === ROLES.SELLER ? supabaseB : supabaseA;
+    const normalizedEmail = email.trim().toLowerCase();
 
-    const { data, error } = await targetSupabase.auth.signUp({
-      email,
+    const { data, error } = await supabase.auth.signUp({
+      email: normalizedEmail,
       password,
       options: {
-        data: { full_name: fullName, phone, role }
-      }
+        data: {
+          full_name: fullName,
+          phone,
+          role,
+        },
+      },
     });
 
-    if (error || !data.user) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, error: error?.message || 'Registration failed' });
+    if (error || !data?.user) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        error: error?.message || 'Registration failed'
+      });
     }
 
-    const tokenPayload = {
-      id: data.user.id,
-      email: data.user.email,
-      role
-    };
+    const user = data.user;
+    const session = data.session;
 
-    const tokens = generateTokens(tokenPayload);
+    // Upsert into public.profiles for customers
+    if (role === ROLES.CUSTOMER && user?.id) {
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        email: normalizedEmail,
+        full_name: fullName || 'Customer',
+        phone_no: phone || null,
+        role: 'customer',
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      });
+    }
 
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
-      user: data.user,
-      ...tokens
+      user,
+      accessToken: session?.access_token,
+      refreshToken: session?.refresh_token,
     });
   } catch (err) {
     next(err);
@@ -89,13 +117,16 @@ export const refreshToken = async (req, res, next) => {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, error: 'Refresh token required' });
     }
 
-    const decoded = jwt.verify(refreshToken, config.jwt.refreshSecret);
-    const tokenPayload = { id: decoded.id, email: decoded.email, role: decoded.role };
-    const tokens = generateTokens(tokenPayload);
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+    if (error || !data?.session) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, error: 'Invalid or expired refresh token' });
+    }
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
-      ...tokens
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      expiresAt: data.session.expires_at,
     });
   } catch (err) {
     return res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, error: 'Invalid refresh token' });
@@ -104,13 +135,30 @@ export const refreshToken = async (req, res, next) => {
 
 export const getProfile = async (req, res, next) => {
   try {
-    const targetSupabase = req.user.role === ROLES.SELLER ? supabaseB : supabaseA;
-    const { data: user, error } = await targetSupabase.auth.admin.getUserById(req.user.id);
-    if (error || !user) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, error: 'User not found' });
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, error: 'Authorization header missing' });
     }
 
-    res.status(HTTP_STATUS.OK).json({ success: true, user });
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, error: 'User session not found or expired' });
+    }
+
+    const role = user.user_metadata?.role || ROLES.CUSTOMER;
+
+    let profile = null;
+    if (role === ROLES.SELLER) {
+      const { data: seller } = await supabase.from('sellers').select('*').eq('user_id', user.id).maybeSingle();
+      profile = seller;
+    } else {
+      const { data: custProf } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      profile = custProf;
+    }
+
+    res.status(HTTP_STATUS.OK).json({ success: true, user, profile });
   } catch (err) {
     next(err);
   }
