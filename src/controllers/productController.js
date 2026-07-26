@@ -1,5 +1,6 @@
 import { supabaseA } from '../lib/supabase.js';
 import { HTTP_STATUS } from '../constants/index.js';
+import { syncProductToCustomerDb, syncCategoryToCustomerDb } from '../utils/dualDatabaseSync.js';
 
 export const getProducts = async (req, res, next) => {
   try {
@@ -45,7 +46,12 @@ export const createProduct = async (req, res, next) => {
     const { data, error } = await supabaseA.from('products').insert([productPayload]).select();
     if (error) throw error;
 
-    res.status(HTTP_STATUS.CREATED).json({ success: true, data: data[0] });
+    const saved = data?.[0] || productPayload;
+    if (saved) {
+      await syncProductToCustomerDb(saved, 'upsert');
+    }
+
+    res.status(HTTP_STATUS.CREATED).json({ success: true, data: saved });
   } catch (err) {
     next(err);
   }
@@ -58,7 +64,12 @@ export const updateProduct = async (req, res, next) => {
     const { data, error } = await supabaseA.from('products').update(updatePayload).eq('id', id).select();
     if (error) throw error;
 
-    res.status(HTTP_STATUS.OK).json({ success: true, data: data[0] });
+    const updated = data?.[0] || { id, ...updatePayload };
+    if (updated) {
+      await syncProductToCustomerDb(updated, 'upsert');
+    }
+
+    res.status(HTTP_STATUS.OK).json({ success: true, data: updated });
   } catch (err) {
     next(err);
   }
@@ -69,6 +80,8 @@ export const deleteProduct = async (req, res, next) => {
     const { id } = req.params;
     const { error } = await supabaseA.from('products').delete().eq('id', id);
     if (error) throw error;
+
+    await syncProductToCustomerDb({ id }, 'delete');
 
     res.status(HTTP_STATUS.OK).json({ success: true, message: 'Product deleted' });
   } catch (err) {
@@ -93,7 +106,12 @@ export const createCategory = async (req, res, next) => {
     const { data, error } = await supabaseA.from('categories').insert([{ name: name?.trim() }]).select();
     if (error) throw error;
 
-    res.status(HTTP_STATUS.CREATED).json({ success: true, data: data[0] });
+    const saved = data?.[0] || { name: name?.trim() };
+    if (saved) {
+      await syncCategoryToCustomerDb(saved, 'upsert');
+    }
+
+    res.status(HTTP_STATUS.CREATED).json({ success: true, data: saved });
   } catch (err) {
     next(err);
   }
@@ -106,7 +124,12 @@ export const updateCategory = async (req, res, next) => {
     const { data, error } = await supabaseA.from('categories').update({ name: name?.trim() }).eq('id', id).select();
     if (error) throw error;
 
-    res.status(HTTP_STATUS.OK).json({ success: true, data: data[0] });
+    const updated = data?.[0] || { id, name: name?.trim() };
+    if (updated) {
+      await syncCategoryToCustomerDb(updated, 'upsert');
+    }
+
+    res.status(HTTP_STATUS.OK).json({ success: true, data: updated });
   } catch (err) {
     next(err);
   }
@@ -117,6 +140,8 @@ export const deleteCategory = async (req, res, next) => {
     const { id } = req.params;
     const { error } = await supabaseA.from('categories').delete().eq('id', id);
     if (error) throw error;
+
+    await syncCategoryToCustomerDb({ id }, 'delete');
 
     res.status(HTTP_STATUS.OK).json({ success: true, message: 'Category deleted' });
   } catch (err) {
