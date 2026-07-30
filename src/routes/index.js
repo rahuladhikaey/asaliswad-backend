@@ -10,6 +10,7 @@ import adminRoutes from './adminRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
 import uploadRoutes from './uploadRoutes.js';
 import cronRoutes from './cronRoutes.js';
+import checkoutRoutes from './checkoutRoutes.js';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/admin', adminRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/uploads', uploadRoutes);
 router.use('/cron', cronRoutes);
+router.use('/checkout', checkoutRoutes);
 
 export default router;

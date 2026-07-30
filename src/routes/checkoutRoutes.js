@@ -1,0 +1,127 @@
+import { Router } from 'express';
+import crypto from 'crypto';
+import { createOrder } from '../controllers/orderController.js';
+import { createRazorpayOrder } from '../controllers/paymentController.js';
+import { config } from '../config/index.js';
+import { HTTP_STATUS } from '../constants/index.js';
+
+const router = Router();
+
+// 1. COD checkout route
+// The frontend calls POST /api/checkout/cod
+router.post('/cod', async (req, res, next) => {
+  try {
+    const { customer_name, phone, address, items, total, user_id } = req.body;
+    
+    // Map customer frontend payload keys to orderController expected payload
+    req.body = {
+      customer_name,
+      phone,
+      address,
+      items,
+      total_amount: total,
+      user_id,
+      payment_method: 'COD',
+      payment_status: 'PENDING',
+      order_status: 'placed'
+    };
+
+    // Intercept response to match COD expected JSON format: { success: true, orderId }
+    const originalJson = res.json;
+    res.json = function (body) {
+      if (body && body.success && body.data) {
+        return originalJson.call(this, {
+          success: true,
+          orderId: body.data.order_number
+        });
+      }
+      return originalJson.call(this, body);
+    };
+
+    await createOrder(req, res, next);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 2. Razorpay order creation route
+// The frontend calls POST /api/checkout/create-order
+router.post('/create-order', async (req, res, next) => {
+  try {
+    // Intercept response to ensure it returns both 'id' and 'orderId' as expected by the frontend
+    const originalJson = res.json;
+    res.json = function (body) {
+      if (body && body.success && body.orderId) {
+        body.id = body.orderId;
+      }
+      return originalJson.call(this, body);
+    };
+    await createRazorpayOrder(req, res, next);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 3. Razorpay payment verification route
+// The frontend calls POST /api/checkout/verify-payment
+router.post('/verify-payment', async (req, res, next) => {
+  try {
+    const { 
+      razorpay_order_id, 
+      razorpay_payment_id, 
+      razorpay_signature, 
+      customer_name, 
+      phone, 
+      address, 
+      items, 
+      total, 
+      user_id 
+    } = req.body;
+
+    // Verify signature
+    if (config.razorpay.keySecret) {
+      const generatedSignature = crypto
+        .createHmac('sha256', config.razorpay.keySecret)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest('hex');
+
+      if (generatedSignature !== razorpay_signature) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, error: 'Invalid payment signature' });
+      }
+    }
+
+    // Map payload to order creation payload
+    req.body = {
+      customer_name,
+      phone,
+      address,
+      items,
+      total_amount: total,
+      user_id,
+      payment_method: 'ONLINE',
+      payment_status: 'COMPLETE',
+      order_status: 'placed',
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    };
+
+    // Intercept response to match verify-payment expected JSON format: { success: true, orderId }
+    const originalJson = res.json;
+    res.json = function (body) {
+      if (body && body.success && body.data) {
+        return originalJson.call(this, {
+          success: true,
+          orderId: body.data.order_number
+        });
+      }
+      return originalJson.call(this, body);
+    };
+
+    await createOrder(req, res, next);
+  } catch (err) {
+    next(err);
+  }
+});
+
+export default router;
