@@ -2,28 +2,63 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { createOrder } from '../controllers/orderController.js';
 import { createRazorpayOrder } from '../controllers/paymentController.js';
+import { calculateOrderAmounts } from '../utils/orderCalculator.js';
 import { config } from '../config/index.js';
 import { HTTP_STATUS } from '../constants/index.js';
 
 const router = Router();
 
-// 1. COD checkout route
+// 1. Preview calculation route
+// The frontend calls POST /api/checkout/preview
+router.post('/preview', async (req, res, next) => {
+  try {
+    const { items = [], paymentMethod = 'COD', applyAsCard = false, couponCode = '' } = req.body;
+    const calculated = await calculateOrderAmounts({ items, paymentMethod, applyAsCard, couponCode });
+    res.status(HTTP_STATUS.OK).json({ success: true, data: calculated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 2. COD checkout route
 // The frontend calls POST /api/checkout/cod
 router.post('/cod', async (req, res, next) => {
   try {
-    const { customer_name, phone, address, items, total, user_id } = req.body;
+    const { customer_name, phone, address, items, user_id, applyAsCard, couponCode } = req.body;
     
+    // Server-side calculation verification
+    const calculated = await calculateOrderAmounts({ items, paymentMethod: 'COD', applyAsCard, couponCode });
+
     // Map customer frontend payload keys to orderController expected payload
     req.body = {
       customer_name,
       phone,
       address,
       items,
-      total_amount: total,
+      subtotal: calculated.subtotal,
+      discount_amount: calculated.productDiscount + calculated.asCardDiscount + calculated.couponDiscount,
+      shipping_charge: calculated.shippingCharges,
+      total_amount: calculated.grandTotal,
       user_id,
       payment_method: 'COD',
       payment_status: 'PENDING',
-      order_status: 'placed'
+      order_status: 'placed',
+      notes: JSON.stringify({
+        subtotal: calculated.subtotal,
+        productDiscount: calculated.productDiscount,
+        asCardDiscount: calculated.asCardDiscount,
+        couponDiscount: calculated.couponDiscount,
+        deliveryCharges: calculated.deliveryCharges,
+        shippingCharges: calculated.shippingCharges,
+        appCharges: calculated.appCharges,
+        platformCharges: calculated.platformCharges,
+        packagingCharges: calculated.packagingCharges,
+        codCharges: calculated.codCharges,
+        gst: calculated.gst,
+        grandTotal: calculated.grandTotal,
+        marketplaceCommission: calculated.marketplaceCommission,
+        netSellerEarnings: calculated.netSellerEarnings
+      })
     };
 
     // Intercept response to match COD expected JSON format: { success: true, orderId }
@@ -44,7 +79,7 @@ router.post('/cod', async (req, res, next) => {
   }
 });
 
-// 2. Razorpay order creation route
+// 3. Razorpay order creation route
 // The frontend calls POST /api/checkout/create-order
 router.post('/create-order', async (req, res, next) => {
   try {
@@ -62,7 +97,7 @@ router.post('/create-order', async (req, res, next) => {
   }
 });
 
-// 3. Razorpay payment verification route
+// 4. Razorpay payment verification route
 // The frontend calls POST /api/checkout/verify-payment
 router.post('/verify-payment', async (req, res, next) => {
   try {
@@ -74,8 +109,9 @@ router.post('/verify-payment', async (req, res, next) => {
       phone, 
       address, 
       items, 
-      total, 
-      user_id 
+      user_id,
+      applyAsCard,
+      couponCode
     } = req.body;
 
     // Verify signature
@@ -90,20 +126,42 @@ router.post('/verify-payment', async (req, res, next) => {
       }
     }
 
+    // Server-side calculation verification
+    const calculated = await calculateOrderAmounts({ items, paymentMethod: 'ONLINE', applyAsCard, couponCode });
+
     // Map payload to order creation payload
     req.body = {
       customer_name,
       phone,
       address,
       items,
-      total_amount: total,
+      subtotal: calculated.subtotal,
+      discount_amount: calculated.productDiscount + calculated.asCardDiscount + calculated.couponDiscount,
+      shipping_charge: calculated.shippingCharges,
+      total_amount: calculated.grandTotal,
       user_id,
       payment_method: 'ONLINE',
       payment_status: 'COMPLETE',
       order_status: 'placed',
       razorpay_order_id,
       razorpay_payment_id,
-      razorpay_signature
+      razorpay_signature,
+      notes: JSON.stringify({
+        subtotal: calculated.subtotal,
+        productDiscount: calculated.productDiscount,
+        asCardDiscount: calculated.asCardDiscount,
+        couponDiscount: calculated.couponDiscount,
+        deliveryCharges: calculated.deliveryCharges,
+        shippingCharges: calculated.shippingCharges,
+        appCharges: calculated.appCharges,
+        platformCharges: calculated.platformCharges,
+        packagingCharges: calculated.packagingCharges,
+        codCharges: calculated.codCharges,
+        gst: calculated.gst,
+        grandTotal: calculated.grandTotal,
+        marketplaceCommission: calculated.marketplaceCommission,
+        netSellerEarnings: calculated.netSellerEarnings
+      })
     };
 
     // Intercept response to match verify-payment expected JSON format: { success: true, orderId }

@@ -162,3 +162,83 @@ export const createShipment = async (req, res, next) => {
     next(err);
   }
 };
+
+export const handleShiprocketWebhook = async (req, res, next) => {
+  try {
+    const { awb, current_status, shipment_id, etd, status_code } = req.body;
+    
+    if (!shipment_id && !awb) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Invalid payload.' });
+    }
+
+    // 1. Find matching order in Supabase A
+    let query = supabaseA.from('orders').select('*');
+    if (shipment_id) {
+      query = query.eq('shipment_id', String(shipment_id));
+    } else {
+      query = query.eq('tracking_number', String(awb));
+    }
+
+    const { data: order, error: findErr } = await query.maybeSingle();
+
+    if (findErr || !order) {
+      console.warn(`[Shiprocket Webhook Warning] Matching order not found for shipment_id: ${shipment_id}, awb: ${awb}`);
+      return res.status(HTTP_STATUS.OK).json({ success: true, message: 'Webhook acknowledged (Order not found).' });
+    }
+
+    // 2. Map status code to internal status
+    let newStatus = order.order_status;
+    let paymentStatus = order.payment_status;
+
+    const code = Number(status_code);
+    if (code === 6) {
+      newStatus = 'awb_assigned';
+    } else if (code === 13) {
+      newStatus = 'picked_up';
+    } else if (code === 18) {
+      newStatus = 'in_transit';
+    } else if (code === 11) {
+      newStatus = 'reached_destination_hub';
+    } else if (code === 17) {
+      newStatus = 'out_for_delivery';
+    } else if (code === 7) {
+      newStatus = 'delivered';
+      paymentStatus = 'COMPLETE';
+    } else if (code === 10) {
+      newStatus = 'cancelled';
+    }
+
+    // 3. Update order in Supabase A
+    const { error: updateErr } = await supabaseA
+      .from('orders')
+      .update({
+        order_status: newStatus,
+        payment_status: paymentStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', order.id);
+
+    if (updateErr) throw updateErr;
+
+    // 4. Save history in order_status_history
+    await supabaseA.from('order_status_history').insert({
+      order_id: order.id,
+      order_number: order.order_number,
+      status: newStatus,
+      notes: `Status updated via Shiprocket Webhook: ${current_status || newStatus}`
+    });
+
+    // 5. Send notification to seller in Supabase B
+    if (order.seller_id) {
+      await supabaseB.from('seller_notifications').insert({
+        seller_id: order.seller_id,
+        message: `🚚 Order #${order.order_number} shipment status update: ${current_status || newStatus}.`,
+        read_status: false
+      });
+    }
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Status updated successfully.' });
+  } catch (err) {
+    next(err);
+  }
+};
