@@ -32,7 +32,7 @@ app.use(
       if (!origin || ALLOWED_ORIGINS.includes(origin) || process.env.NODE_ENV !== 'production') {
         callback(null, true);
       } else {
-        callback(null, true);
+        callback(new Error(`CORS: Origin '${origin}' is not allowed`));
       }
     },
     credentials: true,

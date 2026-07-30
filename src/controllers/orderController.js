@@ -87,13 +87,15 @@ export const createOrder = async (req, res, next) => {
     }
 
     // 3. Sync to Supabase B per seller & update inventory
+    let sellerIndex = 0;
     for (const [sellerId, sellerItemsList] of Object.entries(sellerItemMap)) {
       const sellerItems = sellerItemsList.map(i => i.item);
       const sellerSubtotal = sellerItems.reduce((sum, i) => sum + (i.subtotal || (i.price * i.quantity)), 0);
 
-      // Create seller order in Supabase B
+      // Create seller order in Supabase B with a unique order number per seller
+      const sellerOrderNumber = `${orderNumber}-S${sellerIndex}`;
       const sellerOrderPayload = {
-        order_number: `${orderNumber}-S`,
+        order_number: sellerOrderNumber,
         seller_id: sellerId,
         user_id: placedOrder.user_id,
         customer_name: placedOrder.customer_name || 'Customer',
@@ -108,6 +110,7 @@ export const createOrder = async (req, res, next) => {
       };
 
       await supabaseB.from('orders').insert([sellerOrderPayload]);
+      sellerIndex++;
 
       // Reduce stock in Supabase B
       for (const { item, currentStock } of sellerItemsList) {

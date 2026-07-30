@@ -28,6 +28,7 @@ export async function calculateOrderAmounts({ items = [], paymentMethod = 'COD',
   try {
     const { data } = await supabaseA
       .from('store_settings')
+      .select('value')
       .eq('key', 'marketplace_rules')
       .maybeSingle();
     if (data?.value) {
