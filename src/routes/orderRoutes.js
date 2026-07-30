@@ -8,6 +8,6 @@ const router = Router();
 router.get('/', authenticateJWT, getOrders);
 router.post('/', createOrder);
 router.put('/:id', authenticateJWT, updateOrderStatus);
-router.delete('/:id', authenticateJWT, requireRole([ROLES.SUPER_ADMIN]), deleteOrder);
+router.delete('/:id', authenticateJWT, requireRole([ROLES.SUPER_ADMIN, ROLES.SELLER]), deleteOrder);
 
 export default router;
