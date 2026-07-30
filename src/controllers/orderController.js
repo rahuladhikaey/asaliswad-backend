@@ -191,10 +191,17 @@ export const updateOrderStatus = async (req, res, next) => {
 export const deleteOrder = async (req, res, next) => {
   try {
     const { id } = req.params;
-    await supabaseA.from('orders').delete().eq('id', id);
-    await supabaseB.from('orders').delete().eq('id', id);
+    const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
 
-    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Order deleted from both databases.' });
+    if (isUuid) {
+      await supabaseA.from('orders').delete().eq('id', id);
+      await supabaseB.from('orders').delete().eq('id', id);
+    } else {
+      await supabaseA.from('orders').delete().eq('order_number', id);
+      await supabaseB.from('orders').delete().eq('order_number', id);
+    }
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Order deleted successfully from both databases.' });
   } catch (err) {
     next(err);
   }
