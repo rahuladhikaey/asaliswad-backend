@@ -284,6 +284,15 @@ export const permanentDeleteSeller = async (req, res, next) => {
       throw rpcErr || new Error('Transaction execution failed.');
     }
 
+    // 5. Invalidate/Delete user from Supabase Auth admin API to ensure sessions are closed
+    try {
+      if (seller.user_id) {
+        await supabaseA.auth.admin.deleteUser(seller.user_id);
+      }
+    } catch (authErr) {
+      console.warn('[Auth Admin Warning] Failed to delete auth user via admin API (could be already deleted by SQL trigger):', authErr.message);
+    }
+
     res.status(HTTP_STATUS.OK).json({ success: true, message: 'Seller account permanently deleted.' });
   } catch (err) {
     next(err);
