@@ -65,6 +65,18 @@ export const initCronJobs = () => {
     await autoCompleteDeliveredOrders();
   });
 
-  console.log('✅ Cron Jobs Scheduled: [Seller Purge @ 00:00, Order Auto-Completion @ 02:00]');
+  // Job 3: Reconcile and pre-generate weekly settlements daily at 03:00 AM
+  cron.schedule('0 3 * * *', async () => {
+    console.log('⏰ [CRON] Starting Daily Seller Settlement Reconciliation...');
+    try {
+      const { error } = await supabaseA.rpc('get_or_create_all_settlements');
+      if (error) throw error;
+      console.log('✅ [CRON] Daily Seller Settlement Reconciliation completed successfully.');
+    } catch (err) {
+      console.error('❌ [CRON] Failed to reconcile seller settlements:', err.message);
+    }
+  });
+
+  console.log('✅ Cron Jobs Scheduled: [Seller Purge @ 00:00, Order Auto-Completion @ 02:00, Settlement Reconcile @ 03:00]');
 };
 

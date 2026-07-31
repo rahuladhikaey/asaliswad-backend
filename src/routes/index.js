@@ -11,6 +11,7 @@ import notificationRoutes from './notificationRoutes.js';
 import uploadRoutes from './uploadRoutes.js';
 import cronRoutes from './cronRoutes.js';
 import checkoutRoutes from './checkoutRoutes.js';
+import settlementRoutes from './settlementRoutes.js';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/notifications', notificationRoutes);
 router.use('/uploads', uploadRoutes);
 router.use('/cron', cronRoutes);
 router.use('/checkout', checkoutRoutes);
+router.use('/settlements', settlementRoutes);
 
 export default router;

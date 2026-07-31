@@ -7,7 +7,7 @@ import axios from 'axios';
  * @param {string} messageHtml - Email body in HTML format
  * @returns {Promise<boolean>} - Success status
  */
-export async function sendSellerStatusEmail(toEmail, subject, messageHtml) {
+export async function sendSellerStatusEmail(toEmail, subject, messageHtml, attachmentUrl = null, attachmentName = 'receipt.pdf') {
   const apiKey = process.env.BREVO_API_KEY;
   const senderEmail = process.env.BREVO_SENDER_EMAIL || 'noreply@asaliswad.com';
   const senderName = process.env.BREVO_SENDER_NAME || 'Asali Swad';
@@ -18,21 +18,32 @@ export async function sendSellerStatusEmail(toEmail, subject, messageHtml) {
   }
 
   try {
+    const payload = {
+      sender: {
+        name: senderName,
+        email: senderEmail
+      },
+      to: [
+        {
+          email: toEmail
+        }
+      ],
+      subject: subject,
+      htmlContent: messageHtml
+    };
+
+    if (attachmentUrl) {
+      payload.attachment = [
+        {
+          url: attachmentUrl,
+          name: attachmentName
+        }
+      ];
+    }
+
     const response = await axios.post(
       'https://api.brevo.com/v3/smtp/email',
-      {
-        sender: {
-          name: senderName,
-          email: senderEmail
-        },
-        to: [
-          {
-            email: toEmail
-          }
-        ],
-        subject: subject,
-        htmlContent: messageHtml
-      },
+      payload,
       {
         headers: {
           'accept': 'application/json',
